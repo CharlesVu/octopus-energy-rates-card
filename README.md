@@ -4,6 +4,9 @@
 
 This lovelace card displays the Octopus Energy rate prices per each 30 minute slot, pulling the data from sensors of the the excellent [BottlecapDave/HomeAssistant-OctopusEnergy](https://github.com/BottlecapDave/) integration.
 
+This is a slight modification on [lozzd/octopus-energy-rates-card](https://github.com/lozzd/octopus-energy-rates-card) where colors are choosen by being below/above the mean rate rather than a arbritrary number.
+Also will be with a red gradient if it's above the `mediumlimit` configuration
+
 This provides a convenient, at a glance way to observe the prices on tariffs that change their price every 30 minutes, for example Octopus Agile.
 
 #### Installation
@@ -16,7 +19,7 @@ Simply click this button to go directly to the details page:
 
 In the Home Assistant UI:
 * Use HACS -> Frontend -> Top Right Menu -> Custom repositories
-* Enter a repo of `lozzd/octopus-energy-rates-card` and category of "Lovelace", and click the Add button
+* Enter a repo of `CharlesVu/octopus-energy-rates-card` and category of "Lovelace", and click the Add button
 * Click "Explore & Download Repositories" and start searching for "octo" and you should see the entry
 * Click "Download" in the bottom right
 
@@ -75,13 +78,12 @@ Here's a breakdown of all the available configuration items:
 | multiplier    | Y        | 100           | multiple rate values for pence (100) or pounds (1)                                                                                                   |
 
 
-
 #### A note on colouring
 
-* The card is hardcoded to display plunge pricing (e.g, below 0p/kWh) as blue
-* If the price is above `highlimit`, then the row is in red
-* If the price is above `mediumlimit`, then the row is coloured orange/yellow
-* Otherwise, the row is coloured is green.
+* The card is hardcoded to display plunge pricing (e.g, below 0p/kWh) as blue. 
+* If the price is above `mean_rate`, then the row is in orange
+* Otherwise, the row is coloured is green. 
+* If the price is above `mediumlimit`, then the row is will have a red gradient
 * These are reversed if `exportrates` is set to `true`
 
 #### Screenshot
@@ -89,3 +91,4 @@ Here's a breakdown of all the available configuration items:
 
 #### Thanks/inspiration
 This card was based on and reworked from the code [markgdev/home-assistant_OctopusAgile](https://github.com/markgdev/home-assistant_OctopusAgile/tree/master/custom_cards) which is no longer maintained. 
+Thanks [lozzd/octopus-energy-rates-card](https://github.com/lozzd/octopus-energy-rates-card) for the base code.

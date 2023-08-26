@@ -1,9 +1,9 @@
 class OctopusEnergyRatesCard extends HTMLElement {
     set hass(hass) {
         const config = this._config;
+        var card = {}
         if (!this.content) {
-            const card = document.createElement('ha-card');
-            card.header = config.title;
+            this.card = document.createElement('ha-card');
             this.content = document.createElement('div');
             this.content.style.padding = '0 16px 16px';
 
@@ -39,16 +39,16 @@ class OctopusEnergyRatesCard extends HTMLElement {
                 vertical-align: middle;
             }
             td.time_red{
-                border-bottom: 1px solid Tomato;
+                border: 1px solid #c93333;
             }
             td.time_orange{
-                border-bottom: 1px solid orange;
+                border: 1px solid #b06f00;
             }
             td.time_green{
-                border-bottom: 1px solid MediumSeaGreen;
+                border: 1px solid #23ae34;
             }
             td.time_blue{
-                border-bottom: 1px solid #391CD9;
+                border: 1px solid #391CD9;
             }
             td.time_cheapest{
                 border-bottom: 1px solid LightGreen;
@@ -57,28 +57,49 @@ class OctopusEnergyRatesCard extends HTMLElement {
                 border-bottom: 1px solid LightBlue;
             }
             td.rate {
-                color:white;
+                color:black;
                 text-align:center;
                 vertical-align: middle;
                 width:80px;
-
-                border-top-right-radius:15px;
-                border-bottom-right-radius:15px;
             }
             td.red {
-                border: 2px solid Tomato;
-                background-color: Tomato;
+                background-color: #c93333;
             }
             td.orange {
-                border: 2px solid orange;
-                background-color: orange;
+                background-color: #b06f00;
             }
             td.green {
-                border: 2px solid MediumSeaGreen;
-                background-color: MediumSeaGreen;
+                background-color: #23ae34;
             }
+
+            td.red_g {
+                color:white
+                border: 1px solid #c93333;
+                background-color: #c93333;
+            }
+            td.orange_g {
+                border: 1px solid #b06f00;
+                background: repeating-linear-gradient(
+                    -45deg,
+                    #c93333,
+                    #c93333 10px,
+                    #948700 10px,
+                    #948700 20px
+                  );
+            }
+            td.green_g {
+                border: 1px solid #23ae34;
+                background:repeating-linear-gradient(
+                    -45deg,
+                    #c93333,
+                    #c93333 10px,
+                    #23ae34 10px,
+                    #23ae34 20px
+                  );
+            }
+
             td.blue {
-                border: 2px solid #391CD9;
+                border: 1px solid #391CD9;
                 background-color: #391CD9;
             }
             td.cheapest {
@@ -92,9 +113,9 @@ class OctopusEnergyRatesCard extends HTMLElement {
                 background-color: LightBlue;
             }
             `;
-            card.appendChild(style);
-            card.appendChild(this.content);
-            this.appendChild(card);
+            this.card.appendChild(style);
+            this.card.appendChild(this.content);
+            this.appendChild(this.card);
         }
 
         const colours_import = ['green', 'red', 'orange', 'blue', 'cheapest', 'cheapestblue'];
@@ -102,38 +123,19 @@ class OctopusEnergyRatesCard extends HTMLElement {
 
         const currentEntityId = config.currentEntity;
         const futureEntityId = config.futureEntity;
-        const pastEntityId = config.pastEntity;
-        const mediumlimit = config.mediumlimit;
-        const highlimit = config.highlimit;
         const unitstr = config.unitstr;
         const roundUnits = config.roundUnits;
         const showpast = config.showpast;
         const showday = config.showday;
         const hour12 = config.hour12;
-        const cheapest = config.cheapest;
-        const combinerate = config.combinerate;
-        const multiplier = config.multiplier
         var colours = (config.exportrates ? colours_export : colours_import);
-        var rates_totalnumber = 0;
         var combinedRates = [];
         
         // Grab the rates which are stored as an attribute of the sensor
-        const paststate = hass.states[pastEntityId];
         const currentstate = hass.states[currentEntityId];
         const futurestate = hass.states[futureEntityId];
         
         // Combine the data sources
-        if (typeof(paststate) != 'undefined' && paststate != null)
-        {
-            const pastattributes = this.reverseObject(paststate.attributes);
-            var ratesPast = pastattributes.rates;
-
-            ratesPast.forEach(function (key) {
-                combinedRates.push(key);
-                rates_totalnumber ++;
-            });
-        }
-
         if (typeof(currentstate) != 'undefined' && currentstate != null)
         {
             const currentattributes = this.reverseObject(currentstate.attributes);
@@ -141,15 +143,7 @@ class OctopusEnergyRatesCard extends HTMLElement {
     
             ratesCurrent.forEach(function (key) {
                 combinedRates.push(key);
-                rates_totalnumber ++;
             });
-        }
-        // Check to see if the 'rates' attribute exists on the chosen entity. If not, either the wrong entity
-        // was chosen or there's something wrong with the integration.
-        // The rates attribute also appears to be missing after a restart for a while - please see:
-        // https://github.com/BottlecapDave/HomeAssistant-OctopusEnergy/issues/135
-        if (!ratesCurrent) {
-            throw new Error("There are no rates assigned to that entity! Please check integration or chosen entity");
         }
         
         if (typeof(futurestate) != 'undefined' && futurestate != null)
@@ -159,66 +153,26 @@ class OctopusEnergyRatesCard extends HTMLElement {
         
             ratesFuture.forEach(function (key) {
                 combinedRates.push(key);
-                rates_totalnumber ++;
             });
         }
         
-        // This is critical to breaking down the columns properly. For now, there's now
-        // two loops doing the same thing which is not ideal.
-        // TODO: there should be one clear data process loop and one rendering loop? Or a function?
         var rates_list_length = 0;
-        var cheapest_rate = 5000;
-        var previous_rate = 0;
-        
-        var rates_currentNumber = 0;
-        var previous_rates_day = "";
-        var rates_processingRow = 0;
+        var mean_rate = 0;
         var filteredRates = [];
-
-        // filter out rates to display
         combinedRates.forEach(function (key) {
             const date_milli = Date.parse(key.start);
             var date = new Date(date_milli);
-            const lang = navigator.language || navigator.languages[0];
-            var current_rates_day = date.toLocaleDateString(lang, { weekday: 'short' });
-            rates_processingRow ++;
-            var ratesToEvaluate = key.value_inc_vat * multiplier;
-
-            if(showpast || (date - Date.parse(new Date())>-1800000)) 
-            {
-                rates_currentNumber++;
-                
-                // Find the cheapest rate that hasn't past yet
-                if ((ratesToEvaluate < cheapest_rate) && (date - Date.parse(new Date())>-1800000)) cheapest_rate = ratesToEvaluate;
-                
-                // If we don't want to combine same values rates then just push them to new display array
-                if (!combinerate){
-                    filteredRates.push(key);
-                    rates_list_length++;
-                }
-
-                if (combinerate && 
-                        (
-                        (rates_currentNumber == 1)
-                        || (current_rates_day != previous_rates_day) 
-                        || (previous_rate != ratesToEvaluate)
-                        )
-                    )
-                {
-                        filteredRates.push(key);
-                        rates_list_length++;
-                }
-                previous_rate = ratesToEvaluate;
-                previous_rates_day = current_rates_day;
+            if(showpast || (date - Date.parse(new Date())>-1800000)) {
+                rates_list_length++;
+                mean_rate += key.value_inc_vat * 100;
+                filteredRates.push(key);
             }
         });
-
-        const rows_per_col = Math.ceil(rates_list_length / config.cols);
+        mean_rate = mean_rate / rates_list_length;
+        this.card.header = config.title + " (~" +  mean_rate.toFixed(roundUnits) + unitstr + ")";
 
         var tables = "";
-        tables = tables.concat("<td><table class='sub_table'><tbody>");
-        var table = ""
-        var x = 1;
+        var current_index = 0;
 
         filteredRates.forEach(function (key) {
             const date_milli = Date.parse(key.start);
@@ -229,38 +183,38 @@ class OctopusEnergyRatesCard extends HTMLElement {
             var time_locale = date.toLocaleTimeString(lang, options);
             // If the showday config option is set, include the shortened weekday name in the user's Locale
             var date_locale = (showday ? date.toLocaleDateString(lang, { weekday: 'short' }) + ' ' : '');
-
+            // Green
             var colour = colours[0];
-            var valueToDisplay = key.value_inc_vat * multiplier;
-            if (cheapest && (valueToDisplay == cheapest_rate && cheapest_rate > 0)) colour = colours[4];
-            else if (cheapest && (valueToDisplay == cheapest_rate && cheapest_rate <= 0)) colour = colours[5];
-            else if (valueToDisplay > highlimit) colour = colours[1];
-            else if (valueToDisplay > mediumlimit) colour = colours[2];
-            else if (valueToDisplay <= 0) colour = colours[3];
+            // orange
+            if (key.value_inc_vat * 100 > mean_rate) 
+                colour = colours[2];
+            // blue
+            else if (key.value_inc_vat * 100 <= 0 ) 
+                colour = colours[3];
+
+            var ext = "";
+            if (key.value_inc_vat * 100 > config.mediumlimit) 
+                ext = "_g";
 
             if(showpast || (date - Date.parse(new Date())>-1800000)) {
-                table = table.concat("<tr class='rate_row'><td class='time time_"+colour+"'>" + date_locale + time_locale + 
-                        "</td><td class='rate "+colour+"'>" + valueToDisplay.toFixed(roundUnits) + unitstr + "</td></tr>");
+                if (current_index % config.cols == 0)
+                    tables = tables.concat("<tr class='rate_row'>")
 
-                if (x % rows_per_col == 0) {
-                    tables = tables.concat(table);
-                    table = "";
-                    if (rates_list_length != x) {
-                        tables = tables.concat("</tbody></table></td>");
-                        tables = tables.concat("<td><table class='sub_table'><tbody>");
-                    }
+                tables = tables.concat("<td class='time time_"+colour+"'>" + date_locale + time_locale + 
+                        "</td><td class='rate "+colour+ext+"'>" + (key.value_inc_vat * 100).toFixed(roundUnits) + unitstr + "</td>");
+
+                if (current_index % config.cols == 1) {
+                    tables = tables.concat("</tr>")
                 };
-            x++;
+                current_index++;
             }
         });
-        tables = tables.concat(table);
-        tables = tables.concat("</tbody></table></td>");
 
         this.content.innerHTML = `
         <table class="main">
-            <tr>
+            <tbody>
                 ${tables}
-            </tr>
+            </tbody>
         </table>
         `;
     }
