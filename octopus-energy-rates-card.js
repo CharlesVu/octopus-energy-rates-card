@@ -1,207 +1,241 @@
 class OctopusEnergyRatesCard extends HTMLElement {
     set hass(hass) {
         const config = this._config;
-        var card = {}
         if (!this.content) {
-            this.card = document.createElement('ha-card');
+            this.card = document.createElement('ha-container');
             this.content = document.createElement('div');
             this.content.style.padding = '0 16px 16px';
 
             const style = document.createElement('style');
             style.textContent = `
-            table {
-                width: 100%;
-                padding: 0px;
-                spacing: 0px;
-            }
-            table.sub_table {
-                border-collapse: seperate;
-                border-spacing: 0px 2px;
-            }
-            table.main {
-                padding: 0px;
-            }
-            thead th {
-                text-align: left;
-                padding: 0px;
-            }
-            td {
-                vertical-align: top;
-                padding: 2px;
-                spacing: 0px;
-            }
-            tr.rate_row{
-                text-align:center;
-                width:80px;
-            }
-            td.time {
-                text-align:center;
-                vertical-align: middle;
-            }
-            td.time_red{
-                border: 1px solid #c93333;
-            }
-            td.time_orange{
-                border: 1px solid #b06f00;
-            }
-            td.time_green{
-                border: 1px solid #23ae34;
-            }
-            td.time_blue{
-                border: 1px solid #391CD9;
-            }
-            td.time_cheapest{
-                border-bottom: 1px solid LightGreen;
-            }
-            td.time_cheapestblue{
-                border-bottom: 1px solid LightBlue;
-            }
-            td.rate {
-                color:black;
-                text-align:center;
-                vertical-align: middle;
-                width:80px;
-            }
-            td.red {
-                background-color: #c93333;
-            }
-            td.orange {
-                background-color: #b06f00;
-            }
-            td.green {
-                background-color: #23ae34;
-            }
+table {
+    width: 100%;
+    padding: 8px 8px 8px 8px;
+}
 
-            td.red_g {
-                color:white
-                border: 1px solid #c93333;
-                background-color: #c93333;
-            }
-            td.orange_g {
-                border: 1px solid #b06f00;
-                background: repeating-linear-gradient(
-                    -45deg,
-                    #c93333,
-                    #c93333 10px,
-                    #948700 10px,
-                    #948700 20px
-                  );
-            }
-            td.green_g {
-                border: 1px solid #23ae34;
-                background:repeating-linear-gradient(
-                    -45deg,
-                    #c93333,
-                    #c93333 10px,
-                    #23ae34 10px,
-                    #23ae34 20px
-                  );
-            }
+td {
+    vertical-align: top;
+    padding: 4px;
+}
 
-            td.blue {
-                border: 1px solid #391CD9;
-                background-color: #391CD9;
-            }
-            td.cheapest {
-                color: black;
-                border: 2px solid LightGreen;
-                background-color: LightGreen;
-            }
-            td.cheapestblue {
-                color: black;
-                border: 2px solid LightBlue;
-                background-color: LightBlue;
-            }
-            `;
+tr.rate_row {
+    text-align: center;
+    width: 90px;
+}
+
+td.time {
+    text-align: center;
+    vertical-align: middle;
+    width: 90px;
+}
+
+td.time_orange {
+    border: 1px solid var(--warning-color);
+}
+
+td.time_green {
+    border: 1px solid var(--success-color);
+}
+
+td.time_blue {
+    border: 1px solid var(--info-color);
+}
+
+td.rate {
+    color: black;
+    text-align: center;
+    vertical-align: middle;
+    width: 80px;
+}
+
+td.orange {
+    border: 1px solid var(--warning-color);
+    background-color: var(--warning-color);
+}
+
+td.green {
+    border: 1px solid var(--success-color);
+    background-color: var(--success-color);
+}
+
+td.blue {
+    border: 1px solid var(--info-color);
+    background-color: var(--info-color);
+}
+
+td.blue_over_median {
+    border: 1px solid var(--warning-color);
+    background: repeating-linear-gradient(-45deg,
+            var(--error-color),
+            var(--error-color) 10px,
+            var(--warning-color) 10px,
+            var(--warning-color) 20px);
+}
+
+td.orange_over_median {
+    border: 1px solid var(--warning-color);
+    background: repeating-linear-gradient(-45deg,
+            var(--error-color),
+            var(--error-color) 10px,
+            var(--warning-color) 10px,
+            var(--warning-color) 20px);
+}
+
+td.green_over_median {
+    border: 1px solid var(--success-color);
+    background-color: var(--success-color);
+}
+                `;
             this.card.appendChild(style);
             this.card.appendChild(this.content);
             this.appendChild(this.card);
         }
+        var todayRates = [];
+        var tomorrowRates = [];
+        const lang = navigator.language || navigator.languages[0];
 
-        const colours_import = ['green', 'red', 'orange', 'blue', 'cheapest', 'cheapestblue'];
-        const colours_export = [ 'red', 'green', 'orange' ];
-
-        const currentEntityId = config.currentEntity;
-        const futureEntityId = config.futureEntity;
-        const unitstr = config.unitstr;
-        const roundUnits = config.roundUnits;
-        const showpast = config.showpast;
-        const showday = config.showday;
-        const hour12 = config.hour12;
-        var colours = (config.exportrates ? colours_export : colours_import);
-        var combinedRates = [];
-        
         // Grab the rates which are stored as an attribute of the sensor
-        const currentstate = hass.states[currentEntityId];
-        const futurestate = hass.states[futureEntityId];
-        
-        // Combine the data sources
-        if (typeof(currentstate) != 'undefined' && currentstate != null)
-        {
-            const currentattributes = this.reverseObject(currentstate.attributes);
-            var ratesCurrent = currentattributes.rates;
-    
-            ratesCurrent.forEach(function (key) {
-                combinedRates.push(key);
-            });
-        }
-        
-        if (typeof(futurestate) != 'undefined' && futurestate != null)
-        {
-            const futureattributes = this.reverseObject(futurestate.attributes);
-            var ratesFuture = futureattributes.rates;
-        
-            ratesFuture.forEach(function (key) {
-                combinedRates.push(key);
-            });
-        }
-        
-        var rates_list_length = 0;
-        var mean_rate = 0;
-        var filteredRates = [];
-        combinedRates.forEach(function (key) {
-            const date_milli = Date.parse(key.start);
-            var date = new Date(date_milli);
-            if(showpast || (date - Date.parse(new Date())>-1800000)) {
-                rates_list_length++;
-                mean_rate += key.value_inc_vat * 100;
-                filteredRates.push(key);
-            }
-        });
-        mean_rate = mean_rate / rates_list_length;
-        this.card.header = config.title + " (~" +  mean_rate.toFixed(roundUnits) + unitstr + ")";
+        const currentEntity = hass.states[config.currentEntity];
+        const futureEntity = hass.states[config.futureEntity];
 
-        var tables = "";
+        var allSlotsTargetTimes = [];
+        const targetTimesEntities = config.targetTimesEntities && Object.keys(config.targetTimesEntities) || [];
+        // Iterate through each entity in targetTimesEntities
+        for (const entityId of targetTimesEntities) {
+            const entityTimesState = hass.states[entityId];
+            const entityExtraData = config.targetTimesEntities[entityId] || [];
+            const backgroundColour = entityExtraData.backgroundColour || "Navy";
+            const timePrefix = entityExtraData.prefix || "";
+            // Access the attributes of the current entity
+            const entityAttributes = entityTimesState ? this.reverseObject(entityTimesState.attributes) : {};
+            // Get the target_times array, handling potential undefined cases
+            const targetTimes = entityAttributes.target_times || [];
+            // Iterate through each target time and push it individually
+            for (const targetTime of targetTimes) {
+                allSlotsTargetTimes.push({
+                    start: targetTime.start,
+                    end: targetTime.end,
+                    color: backgroundColour,
+                    timePrefix: timePrefix,
+                });
+            }
+        }
+
+        var rates_list_length = 0;
+        var todayMeanRate = 0;
+        var todaysDay;
+
+        // Combine the data sources
+        if (typeof (currentEntity) != 'undefined' && currentEntity != null) {
+            const currentattributes = this.reverseObject(currentEntity.attributes);
+            var ratesCurrent = currentattributes.rates;
+
+            ratesCurrent.forEach(function (key) {
+                const date_milli = Date.parse(key.start);
+                var date = new Date(date_milli);
+                todaysDay = date.toLocaleDateString(lang, { weekday: 'long' });
+
+                rates_list_length++;
+                todayMeanRate += key.value_inc_vat * 100;
+
+                if (config.showpast || (date - Date.parse(new Date()) > -1800000)) {
+                    todayRates.push(key);
+                }
+            });
+        }
+
+        todayMeanRate = todayMeanRate / rates_list_length;
+        rates_list_length = 0
+        var tomorrowMeanRate = 0;
+        var tomorrowsDay;
+
+        if (typeof (futureEntity) != 'undefined' && futureEntity != null) {
+            const futureattributes = this.reverseObject(futureEntity.attributes);
+            var ratesFuture = futureattributes.rates;
+
+            ratesFuture.forEach(function (key) {
+                const date_milli = Date.parse(key.start);
+                var date = new Date(date_milli);
+                tomorrowsDay = date.toLocaleDateString(lang, { weekday: 'long' });
+
+                rates_list_length++;
+                tomorrowMeanRate += key.value_inc_vat * 100;
+                tomorrowRates.push(key);
+            });
+        }
+
+
+        tomorrowMeanRate = tomorrowMeanRate / rates_list_length;
+        const title = config.title;
+
+        const todayTitle = todaysDay + " (~" + todayMeanRate.toFixed(config.roundUnits) + config.unitstr + ")";
+        const tomorrowTitle = tomorrowsDay + " (~" + tomorrowMeanRate.toFixed(config.roundUnits) + config.unitstr + ")";
+
+        this.content.innerHTML = `
+        <h1 class="card-header">${title}</h1>
+        <h2 class="card-header">${todayTitle} </h2>
+        <ha-card class="card">
+            ${this.name(todayRates, todayMeanRate, allSlotsTargetTimes)}
+        </ha-card>
+
+        `;
+        if (typeof (futureEntity) != 'undefined' && futureEntity != null) {
+            this.content.innerHTML += `
+                <h2 class="card-header">${tomorrowTitle}</h2>
+                <ha-card class="card">
+                    ${this.name(tomorrowRates, tomorrowMeanRate, allSlotsTargetTimes)}
+                </ha-card>
+        `
+        }
+    }
+
+    name(rates, mean_rate, allSlotsTargetTimes) {
+        const config = this._config;
+
+        var colours = ['green', 'blue', 'orange'];
+
+        var tables = `
+        <table class="main">
+        <tbody>
+        `;
         var current_index = 0;
 
-        filteredRates.forEach(function (key) {
+        rates.forEach(function (key) {
             const date_milli = Date.parse(key.start);
             var date = new Date(date_milli);
             const lang = navigator.language || navigator.languages[0];
-            var options = {hourCycle: 'h23', hour12: hour12, hour: '2-digit', minute:'2-digit'};
+            var options = { hourCycle: 'h23', hour12: config.hour12, hour: '2-digit', minute: '2-digit' };
             // The time formatted in the user's Locale
             var time_locale = date.toLocaleTimeString(lang, options);
-            // If the showday config option is set, include the shortened weekday name in the user's Locale
-            var date_locale = (showday ? date.toLocaleDateString(lang, { weekday: 'short' }) + ' ' : '');
-            // Green
-            var colour = colours[0];
-            // orange
-            if (key.value_inc_vat * 100 > mean_rate) 
+            // Blue
+            var colour = colours[1];
+            // Orange
+            if (key.value_inc_vat * 100 > mean_rate)
                 colour = colours[2];
-            // blue
-            else if (key.value_inc_vat * 100 <= 0 ) 
-                colour = colours[3];
+            // Green
+            else if (key.value_inc_vat * 100 <= 0)
+                colour = colours[0];
+
+            var targetTimePrefix = "";
+            // Check if the current time row corresponds to a target time
+            allSlotsTargetTimes.forEach(function (targetTime) {
+                const startTime = new Date(targetTime.start);
+                const endTime = new Date(targetTime.end);
+                if (date >= startTime && date < endTime) {
+                    targetTimePrefix = targetTime.timePrefix ? targetTimePrefix + targetTime.timePrefix + " " : targetTimePrefix;
+                }
+            });
 
             var ext = "";
-            if (key.value_inc_vat * 100 > config.mediumlimit) 
-                ext = "_g";
+            if (key.value_inc_vat * 100 > config.mediumlimit)
+                ext = "_over_median";
 
-            if(showpast || (date - Date.parse(new Date())>-1800000)) {
+            if (config.showpast || (date - Date.parse(new Date()) > -1800000)) {
                 if (current_index % config.cols == 0)
                     tables = tables.concat("<tr class='rate_row'>")
 
-                tables = tables.concat("<td class='time time_"+colour+"'>" + date_locale + time_locale + 
-                        "</td><td class='rate "+colour+ext+"'>" + (key.value_inc_vat * 100).toFixed(roundUnits) + unitstr + "</td>");
+                tables = tables.concat("<td class='time time_" + colour + "'>" + targetTimePrefix + time_locale +
+                    "</td><td class='rate " + colour + ext + "'>" + (key.value_inc_vat * 100).toFixed(config.roundUnits) + config.unitstr + "</td>");
 
                 if (current_index % config.cols == 1) {
                     tables = tables.concat("</tr>")
@@ -210,13 +244,8 @@ class OctopusEnergyRatesCard extends HTMLElement {
             }
         });
 
-        this.content.innerHTML = `
-        <table class="main">
-            <tbody>
-                ${tables}
-            </tbody>
-        </table>
-        `;
+        tables += `</tbody></table>`
+        return tables;
     }
 
     reverseObject(object) {
