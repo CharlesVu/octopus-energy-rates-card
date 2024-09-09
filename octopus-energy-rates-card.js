@@ -90,9 +90,6 @@ td.green_over_median {
             this.card.appendChild(this.content);
             this.appendChild(this.card);
         }
-        var todayRates = [];
-        var tomorrowRates = [];
-        const lang = navigator.language || navigator.languages[0];
 
         // Grab the rates which are stored as an attribute of the sensor
         const currentEntity = hass.states[config.currentEntity];
@@ -104,10 +101,9 @@ td.green_over_median {
         for (const entityId of targetTimesEntities) {
             const entityTimesState = hass.states[entityId];
             const entityExtraData = config.targetTimesEntities[entityId] || [];
-            const backgroundColour = entityExtraData.backgroundColour || "Navy";
             const timePrefix = entityExtraData.prefix || "";
             // Access the attributes of the current entity
-            const entityAttributes = entityTimesState ? this.reverseObject(entityTimesState.attributes) : {};
+            const entityAttributes = entityTimesState ? entityTimesState.attributes : {};
             // Get the target_times array, handling potential undefined cases
             const targetTimes = entityAttributes.target_times || [];
             // Iterate through each target time and push it individually
@@ -115,105 +111,88 @@ td.green_over_median {
                 allSlotsTargetTimes.push({
                     start: targetTime.start,
                     end: targetTime.end,
-                    color: backgroundColour,
                     timePrefix: timePrefix,
                 });
             }
         }
 
-        var rates_list_length = 0;
-        var todayMeanRate = 0;
-        var todaysDay;
-
-        // Combine the data sources
-        if (typeof (currentEntity) != 'undefined' && currentEntity != null) {
-            const currentattributes = this.reverseObject(currentEntity.attributes);
-            var ratesCurrent = currentattributes.rates;
-
-            ratesCurrent.forEach(function (key) {
-                const date_milli = Date.parse(key.start);
-                var date = new Date(date_milli);
-                todaysDay = date.toLocaleDateString(lang, { weekday: 'long' });
-
-                rates_list_length++;
-                todayMeanRate += key.value_inc_vat * 100;
-
-                if (config.showpast || (date - Date.parse(new Date()) > -1800000)) {
-                    todayRates.push(key);
-                }
-            });
-        }
-
-        todayMeanRate = todayMeanRate / rates_list_length;
-        rates_list_length = 0
-        var tomorrowMeanRate = 0;
-        var tomorrowsDay;
-
-        if (typeof (futureEntity) != 'undefined' && futureEntity != null) {
-            const futureattributes = this.reverseObject(futureEntity.attributes);
-            var ratesFuture = futureattributes.rates;
-
-            ratesFuture.forEach(function (key) {
-                const date_milli = Date.parse(key.start);
-                var date = new Date(date_milli);
-                tomorrowsDay = date.toLocaleDateString(lang, { weekday: 'long' });
-
-                rates_list_length++;
-                tomorrowMeanRate += key.value_inc_vat * 100;
-                tomorrowRates.push(key);
-            });
-        }
-
-
-        tomorrowMeanRate = tomorrowMeanRate / rates_list_length;
+        const today = this.computeRates(currentEntity);
+        const tomorrow = this.computeRates(futureEntity);
         const title = config.title;
 
-        const todayTitle = todaysDay + " (~" + todayMeanRate.toFixed(config.roundUnits) + config.unitstr + ")";
-        const tomorrowTitle = tomorrowsDay + " (~" + tomorrowMeanRate.toFixed(config.roundUnits) + config.unitstr + ")";
+        const todayTitle = today.dayOfTheWeek + " (~" + this.renderPrice(today.meanRate) + ")";
+        const tomorrowTitle = tomorrow.dayOfTheWeek + " (~" + this.renderPrice(tomorrow.meanRate) + ")";
 
         this.content.innerHTML = `
         <h1 class="card-header">${title}</h1>
-        <h2 class="card-header">${todayTitle} </h2>
+        <h2 class="card-header">${todayTitle}</h2>
         <ha-card class="card">
-            ${this.name(todayRates, todayMeanRate, allSlotsTargetTimes)}
+            ${this.renderPriceTable(today.rates, today.meanRate, allSlotsTargetTimes)}
         </ha-card>
-
         `;
-        if (typeof (futureEntity) != 'undefined' && futureEntity != null) {
+        if (typeof (futureEntity) != 'undefined' && futureEntity != null && futureEntity.attributes.rates.length != 0) {
             this.content.innerHTML += `
                 <h2 class="card-header">${tomorrowTitle}</h2>
                 <ha-card class="card">
-                    ${this.name(tomorrowRates, tomorrowMeanRate, allSlotsTargetTimes)}
+                    ${this.renderPriceTable(tomorrow.rates, tomorrow.meanRate, allSlotsTargetTimes)}
                 </ha-card>
         `
         }
     }
 
-    name(rates, mean_rate, allSlotsTargetTimes) {
+    computeRates(entity) {
+        const lang = navigator.language || navigator.languages[0];
+        var meanRateSum = 0;
+        var dayOfTheWeek = "";
+        var rates = [];
+
+        if (typeof (entity) != 'undefined' && entity != null) {
+            const currentRates = entity.attributes.rates;
+
+            currentRates.forEach(function (key) {
+                const date_milli = Date.parse(key.start);
+                const date = new Date(date_milli);
+                if (dayOfTheWeek == "") {
+                    dayOfTheWeek = date.toLocaleDateString(lang, { weekday: 'long' });
+                }
+                meanRateSum += key.value_inc_vat;
+
+                if (this._config.showpast || (date - Date.parse(new Date()) > -1800000)) {
+                    rates.push(key);
+                }
+            }, this);
+        }
+        return ({
+            "rates": rates,
+            "meanRate": meanRateSum / entity.attributes.rates.length,
+            "dayOfTheWeek": dayOfTheWeek
+        })
+    }
+
+    renderPriceTable(rates, mean_rate, allSlotsTargetTimes) {
         const config = this._config;
 
-        var colours = ['green', 'blue', 'orange'];
+        const colours = ['green', 'blue', 'orange'];
 
         var tables = `
         <table class="main">
         <tbody>
         `;
-        var current_index = 0;
 
-        rates.forEach(function (key) {
+        rates.forEach(function (key, currentIndex) {
             const date_milli = Date.parse(key.start);
-            var date = new Date(date_milli);
+            const date = new Date(date_milli);
             const lang = navigator.language || navigator.languages[0];
-            var options = { hourCycle: 'h23', hour12: config.hour12, hour: '2-digit', minute: '2-digit' };
+            const options = { hourCycle: 'h23', hour12: config.hour12, hour: '2-digit', minute: '2-digit' };
             // The time formatted in the user's Locale
             var time_locale = date.toLocaleTimeString(lang, options);
             // Blue
             var colour = colours[1];
             // Orange
-            if (key.value_inc_vat * 100 > mean_rate)
+            if (key.value_inc_vat > mean_rate)
                 colour = colours[2];
             // Green
-            else if (key.value_inc_vat * 100 <= 0)
+            else if (key.value_inc_vat <= 0)
                 colour = colours[0];
 
             var targetTimePrefix = "";
@@ -231,37 +210,24 @@ td.green_over_median {
                 ext = "_over_median";
 
             if (config.showpast || (date - Date.parse(new Date()) > -1800000)) {
-                if (current_index % config.cols == 0)
+                if (currentIndex % config.cols == 0)
                     tables = tables.concat("<tr class='rate_row'>")
 
                 tables = tables.concat("<td class='time time_" + colour + "'>" + targetTimePrefix + time_locale +
-                    "</td><td class='rate " + colour + ext + "'>" + (key.value_inc_vat * 100).toFixed(config.roundUnits) + config.unitstr + "</td>");
+                    "</td><td class='rate " + colour + ext + "'>" + this.renderPrice(key.value_inc_vat) + "</td>");
 
-                if (current_index % config.cols == 1) {
+                if (currentIndex % config.cols == config.cols - 1) {
                     tables = tables.concat("</tr>")
                 };
-                current_index++;
             }
-        });
+        }, this);
 
         tables += `</tbody></table>`
         return tables;
     }
 
-    reverseObject(object) {
-        var newObject = {};
-        var keys = [];
-
-        for (var key in object) {
-            keys.push(key);
-        }
-
-        for (var i = keys.length - 1; i >= 0; i--) {
-            var value = object[keys[i]];
-            newObject[keys[i]] = value;
-        }
-
-        return newObject;
+    renderPrice(priceInCents) {
+        return (priceInCents * 100).toFixed(this._config.roundUnits) + this._config.unitstr
     }
 
     setConfig(config) {
@@ -274,10 +240,8 @@ td.green_over_median {
             cols: 1,
             // Show rates that already happened in the card
             showpast: false,
-            // Show the day of the week with the time
-            showday: false,
             // Use 12 or 24 hour time
-            hour12: true,
+            hour12: false,
             // Controls the title of the card
             title: 'Agile Rates',
             // Colour controls:
