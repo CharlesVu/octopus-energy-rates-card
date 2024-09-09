@@ -227,7 +227,7 @@ td.green_over_median {
     }
 
     renderPrice(priceInCents) {
-        return (priceInCents * 100).toFixed(this._config.roundUnits) + this._config.unitstr
+        return (priceInCents * this._config.multiplier).toFixed(this._config.roundUnits) + this._config.unitstr
     }
 
     setConfig(config) {
@@ -245,22 +245,13 @@ td.green_over_median {
             // Controls the title of the card
             title: 'Agile Rates',
             // Colour controls:
-            // If the price is above highlimit, the row is marked red.
             // If the price is above mediumlimit, the row is marked yellow.
-            // If the price is below mediumlimit, the row is marked green.
             // If the price is below 0, the row is marked blue.
             mediumlimit: 20,
-            highlimit: 30,
             // Controls the rounding of the units of the rate
             roundUnits: 2,
             // The unit string to show if units are shown after each rate
             unitstr: 'p/kWh',
-            // Make the colouring happen in reverse, for export rates
-            exportrates: false,
-            // Higlight the cheapest rate
-            cheapest: false,
-            // Combine equal rates
-            combinerate: false,
             // multiple rate values for pence (100) or pounds (1)
             multiplier: 100
         };
